@@ -25,16 +25,27 @@ log "timestamp_utc=${TS}"
 log "root=${ROOT_DOMAIN} api=${API_DOMAIN} app=${APP_DOMAIN}"
 
 # DNS
-run dig +noall +answer "${ROOT_DOMAIN}" A AAAA CNAME
-run dig +noall +answer "${API_DOMAIN}" A AAAA CNAME
-run dig +noall +answer "${APP_DOMAIN}" A AAAA CNAME
+# Note: `dig` only supports one RR type per query; run separate queries for clean, predictable output.
+dig_answers() {
+  local name="$1"
+  shift
+  local t
+  for t in "$@"; do
+    run dig +noall +answer "${name}" "${t}"
+  done
+}
+
+dig_answers "${ROOT_DOMAIN}" A AAAA CNAME
+dig_answers "${API_DOMAIN}" A AAAA CNAME
+dig_answers "${APP_DOMAIN}" A AAAA CNAME
 
 # Nameservers for the zone
 run dig +noall +answer "${ROOT_DOMAIN}" NS
 
 # HTTP headers (follow redirects)
-run curl -sS -D - -o /dev/null -L "https://${ROOT_DOMAIN}"
-run curl -sS -D - -o /dev/null -L "https://${API_DOMAIN}"
+# Use timeouts so the script doesn't hang on network issues.
+run curl -sS -D - -o /dev/null -L --connect-timeout 10 --max-time 30 "https://${ROOT_DOMAIN}"
+run curl -sS -D - -o /dev/null -L --connect-timeout 10 --max-time 30 "https://${API_DOMAIN}"
 
 # TLS certificate chain summary
 # Note: will hang if SNI mismatch; we pass -servername.
